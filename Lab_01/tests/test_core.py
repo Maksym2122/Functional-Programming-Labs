@@ -6,15 +6,16 @@ from core import (
     compose,
     make_multiplier,
     calculate_restock_qty,
+    filter_products,
     Product
 )
 
 @pytest.fixture
 def sample_products() -> list[Product]:
     return [
-        {"id": 1, "name": "Товар A", "category": "Електроніка", "stock": 5, "min_stock": 20, "price": 10.0},
-        {"id": 2, "name": "Товар B", "category": "Електроніка", "stock": 30, "min_stock": 10, "price": 50.0},
-        {"id": 3, "name": "Товар C", "category": "Офіс", "stock": 0, "min_stock": 100, "price": 2.0}
+        Product(id=1, name="Товар A", category="Електроніка", stock=5, min_stock=20, price=10.0),
+        Product(id=2, name="Товар B", category="Електроніка", stock=30, min_stock=10, price=50.0),
+        Product(id=3, name="Товар C", category="Офіс", stock=0, min_stock=100, price=2.0)
     ]
 
 def test_referential_transparency(sample_products):
@@ -29,7 +30,7 @@ def test_no_mutation(sample_products):
 
 def test_callable_policies(sample_products):
     processor = make_inventory_processor(
-        needs_reorder=lambda p: p.get("stock", 0) < p.get("min_stock", 0),
+        needs_reorder=lambda p: p.stock < p.min_stock,
         discount_policy=lambda cost, qty: cost * 0.5
     )
     result = processor(sample_products)
@@ -39,12 +40,12 @@ def test_callable_policies(sample_products):
 def test_dependency_injection_time(sample_products):
     mock_now = lambda: 1700000000.0
     processor = make_inventory_processor(
-        needs_reorder=lambda p: p.get("stock", 0) < p.get("min_stock", 0),
+        needs_reorder=lambda p: p.stock < p.min_stock,
         discount_policy=lambda cost, qty: cost,
         now=mock_now
     )
     result = processor(sample_products)
-    assert result["products"][0]["timestamp"] == 1700000000.0
+    assert result["products"][0].timestamp == 1700000000.0
 
 def test_compose_and_multiplier():
     double = make_multiplier(2.0)
@@ -53,5 +54,9 @@ def test_compose_and_multiplier():
     assert combined(10.0) == 22.0
 
 def test_calculate_restock_qty():
-    p = {"stock": 10, "min_stock": 25}
+    p = Product(id=1, name="Test", category="Test", stock=10, min_stock=25, price=5.0)
     assert calculate_restock_qty(p) == 15
+
+def test_filter_products(sample_products):
+    res = filter_products(sample_products, lambda p: p.stock < p.min_stock)
+    assert len(res) == 2

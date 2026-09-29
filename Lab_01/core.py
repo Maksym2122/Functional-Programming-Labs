@@ -1,18 +1,30 @@
-from typing import Iterable, Callable, TypedDict, Dict, TypeVar, Optional
+from dataclasses import dataclass, replace
+from enum import Enum
+from typing import Iterable, Callable, List, Dict, TypeVar, Optional
 
-class Product(TypedDict, total=False):
+class Category(Enum):
+    ELECTRONICS = "Електроніка"
+    PERIPHERALS = "Периферія"
+    DISPLAYS = "Дисплеї"
+    ACCESSORIES = "Аксесуари"
+    OTHER = "Інше"
+
+@dataclass(frozen=True)
+class Product:
     id: int
     name: str
     category: str
     stock: int
     min_stock: int
     price: float
-    reorder_qty: int
-    reorder_cost: float
-    timestamp: float
+    reorder_cost: float = 0.0
+    reorder_qty: int = 0
+    timestamp: float = 0.0
 
 ReorderPolicyFn = Callable[[Product], bool]
 DiscountPolicyFn = Callable[[float, int], float]
+FilterFn = Callable[[Product], bool]
+DiscountFn = Callable[[float, int], float]
 NowFn = Callable[[], float]
 
 A = TypeVar("A")
@@ -26,26 +38,25 @@ def make_multiplier(k: float) -> Callable[[float], float]:
     return lambda x: x * k
 
 def calculate_restock_qty(product: Product) -> int:
-    stock = product.get("stock", 0)
-    min_stock = product.get("min_stock", 0)
-    return max(min_stock - stock, 0)
+    needed = product.min_stock - product.stock
+    return max(needed, 0)
 
 def calculate_item_cost(product: Product, discount_policy: DiscountPolicyFn) -> float:
     qty = calculate_restock_qty(product)
-    price = product.get("price", 0.0)
-    base_cost = qty * price
+    base_cost = qty * product.price
     return discount_policy(base_cost, qty)
 
 def with_reorder_info(product: Product, cost: float, timestamp: Optional[float] = None) -> Product:
     qty = calculate_restock_qty(product)
-    new_product = {
-        **product,
-        "reorder_qty": qty,
-        "reorder_cost": cost
-    }
-    if timestamp is not None:
-        new_product["timestamp"] = timestamp
-    return new_product
+    return replace(
+        product,
+        reorder_qty=qty,
+        reorder_cost=cost,
+        timestamp=timestamp if timestamp is not None else product.timestamp
+    )
+
+def filter_products(products: Iterable[Product], predicate: Callable[[Product], bool]) -> List[Product]:
+    return [p for p in products if predicate(p)]
 
 def make_inventory_processor(
     *,
@@ -84,7 +95,7 @@ def process_inventory_pure(
     bulk_threshold: int = 50,
     bulk_discount: float = 0.1
 ) -> Dict[str, object]:
-    needs_reorder = lambda p: p.get("stock", 0) < p.get("min_stock", 0)
+    needs_reorder = lambda p: p.stock < p.min_stock
     discount_policy = lambda cost, qty: cost * (1.0 - bulk_discount) if qty >= bulk_threshold else cost
 
     processor = make_inventory_processor(
