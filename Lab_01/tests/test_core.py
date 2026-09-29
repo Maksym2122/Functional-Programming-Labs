@@ -39,15 +39,8 @@ def sample_products() -> list[Product]:
 def test_referential_transparency():
     products = sample_products()
 
-    r1 = process_products_pure(
-        products,
-        discount=0.1
-    )
-
-    r2 = process_products_pure(
-        products,
-        discount=0.1
-    )
+    r1 = process_products_pure(products, discount=0.1)
+    r2 = process_products_pure(products, discount=0.1)
 
     assert r1 == r2
 
@@ -56,10 +49,7 @@ def test_no_mutation():
     products = sample_products()
     original = deepcopy(products)
 
-    process_products_pure(
-        products,
-        discount=0.1
-    )
+    process_products_pure(products, discount=0.1)
 
     assert products == original
 
@@ -67,10 +57,7 @@ def test_no_mutation():
 def test_replenishment():
     products = sample_products()
 
-    result = process_products_pure(
-        products,
-        discount=0.0
-    )
+    result = process_products_pure(products, discount=0.0)
 
     assert result["count"] == 2
     assert result["products"][0]["order_qty"] == 5

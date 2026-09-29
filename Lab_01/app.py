@@ -1,4 +1,4 @@
-from core import process_products_pure, make_processor, Product
+from core import Product, process_products_pure, make_processor
 
 
 products: list[Product] = [
@@ -37,16 +37,15 @@ products: list[Product] = [
 ]
 
 
-def render_report(result: dict[str, object]) -> None:
+def render_report(result: dict) -> None:
     print("Products for replenishment:")
 
     for product in result["products"]:
         print(
             product["name"],
-            "- quantity:",
-            product["order_qty"],
-            "- cost:",
-            product["replenishment_cost"]
+            "| Category:", product["category"],
+            "| Quantity:", product["order_qty"],
+            "| Cost:", product["replenishment_cost"]
         )
 
     print("Count:", result["count"])
@@ -75,7 +74,7 @@ def main() -> None:
 
     result2 = processor(products)
 
-    print("\nUsing Callable policies:")
+    print("\nUsing Callable:")
     render_report(result2)
 
 

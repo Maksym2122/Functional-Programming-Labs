@@ -1,15 +1,24 @@
 from typing import Callable, TypedDict
 
 
-class Product(TypedDict, total=False):
+class Product(TypedDict):
     id: int
     name: str
     stock: int
     price: float
     min_stock: int
     category: str
+
+
+class ProcessedProduct(Product):
     order_qty: int
     replenishment_cost: float
+
+
+class Result(TypedDict):
+    count: int
+    total_cost: float
+    products: list[ProcessedProduct]
 
 
 def replenishment_quantity(product: Product) -> int:
@@ -24,7 +33,7 @@ def with_replenishment(
     product: Product,
     quantity: int,
     cost: float
-) -> Product:
+) -> ProcessedProduct:
     return {
         **product,
         "order_qty": quantity,
@@ -36,8 +45,8 @@ def process_products_pure(
     products: list[Product],
     *,
     discount: float
-) -> dict[str, object]:
-    selected = []
+) -> Result:
+    selected: list[ProcessedProduct] = []
     total_cost = 0.0
 
     for product in products:
@@ -49,9 +58,13 @@ def process_products_pure(
         cost = replenishment_cost(product, quantity)
         cost = cost * (1 - discount)
 
-        new_product = with_replenishment(product, quantity, cost)
-        selected.append(new_product)
+        new_product = with_replenishment(
+            product,
+            quantity,
+            cost
+        )
 
+        selected.append(new_product)
         total_cost += cost
 
     return {
@@ -69,10 +82,10 @@ def make_processor(
     *,
     reorder: ReorderFn,
     apply_discount: DiscountFn
-) -> Callable[[list[Product]], dict[str, object]]:
+) -> Callable[[list[Product]], Result]:
 
-    def process(products: list[Product]) -> dict[str, object]:
-        selected = []
+    def process(products: list[Product]) -> Result:
+        selected: list[ProcessedProduct] = []
         total_cost = 0.0
 
         for product in products:
@@ -81,7 +94,7 @@ def make_processor(
             if quantity <= 0:
                 continue
 
-            cost = product["price"] * quantity
+            cost = replenishment_cost(product, quantity)
             cost = apply_discount(cost)
 
             new_product = with_replenishment(
