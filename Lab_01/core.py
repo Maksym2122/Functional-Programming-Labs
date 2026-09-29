@@ -1,20 +1,17 @@
 from typing import Iterable, Callable, TypedDict, List, Dict, TypeVar
 
-class Item(TypedDict):
-    price: float
-    qty: int
-
-class Order(TypedDict, total=False):
+class Product(TypedDict):
     id: int
-    items: List[Item]
-    paid: bool
-    total: float
+    name: str
+    category: str
+    stock: int
+    min_stock: int
+    price: float
+    reorder_cost: float
     timestamp: float
 
-SubtotalFn = Callable[[float], float]
-DiscountFn = Callable[[float], float]
-TaxFn = Callable[[float], float]
-FilterFn = Callable[[float], bool]
+ReorderPolicyFn = Callable[[Product], bool]
+DiscountPolicyFn = Callable[[float, int], float]
 NowFn = Callable[[], float]
 
 A = TypeVar("A")
@@ -27,64 +24,61 @@ def compose(f: Callable[[B], C], g: Callable[[A], B]) -> Callable[[A], C]:
 def make_multiplier(k: float) -> Callable[[float], float]:
     return lambda x: x * k
 
-def order_subtotal(order: Order) -> float:
-    return sum(it["price"] * it["qty"] for it in order["items"])
+def calculate_restock_qty(product: Product) -> int:
+    needed = product["min_stock"] - product["stock"]
+    return max(needed, 0)
 
-def with_total(order: Order, total: float, timestamp: float | None = None) -> Order:
-    new_order = {**order, "total": total}
+def calculate_item_cost(product: Product, discount_policy: DiscountPolicyFn) -> float:
+    qty = calculate_restock_qty(product)
+    base_cost = qty * product["price"]
+    return discount_policy(base_cost, qty)
+
+def with_reorder_info(product: Product, cost: float, timestamp: float | None = None) -> Product:
+    new_product = {**product, "reorder_cost": cost}
     if timestamp is not None:
-        new_order["timestamp"] = timestamp
-    return new_order
+        new_product["timestamp"] = timestamp
+    return new_product
 
-def stamp_total(total: float, now: NowFn) -> tuple[float, float]:
-    return total, now()
-
-def make_processor(
+def make_inventory_processor(
     *,
-    accept: FilterFn,
-    apply_discount: DiscountFn,
-    apply_tax: TaxFn,
+    needs_reorder: ReorderPolicyFn,
+    discount_policy: DiscountPolicyFn,
     now: NowFn | None = None
-) -> Callable[[Iterable[Order]], Dict[str, object]]:
-    def process(orders: Iterable[Order]) -> Dict[str, object]:
-        paid_orders = (o for o in orders if o.get("paid", False))
-        
-        qualified = []
-        revenue = 0.0
-        
-        for o in paid_orders:
-            subtotal = order_subtotal(o)
-            if not accept(subtotal):
+) -> Callable[[Iterable[Product]], Dict[str, object]]:
+    def process(products: Iterable[Product]) -> Dict[str, object]:
+        to_reorder = []
+        total_cost = 0.0
+
+        for p in products:
+            if not needs_reorder(p):
                 continue
             
-            total = apply_tax(apply_discount(subtotal))
+            cost = calculate_item_cost(p, discount_policy)
             timestamp = now() if now else None
             
-            qualified.append(with_total(o, total, timestamp))
-            revenue += total
-            
+            updated = with_reorder_info(p, cost, timestamp)
+            to_reorder.append(updated)
+            total_cost += cost
+
         return {
-            "count": len(qualified),
-            "revenue": revenue,
-            "orders": qualified
+            "count": len(to_reorder),
+            "total_reorder_cost": total_cost,
+            "products": to_reorder
         }
-        
+
     return process
 
-def process_orders_pure(
-    orders: Iterable[Order],
+def process_inventory_pure(
+    products: Iterable[Product],
     *,
-    min_total: float,
-    discount: float,
-    tax_rate: float
+    bulk_threshold: int = 50,
+    bulk_discount: float = 0.1
 ) -> Dict[str, object]:
-    accept = lambda s: s >= min_total
-    apply_discount = lambda s: s * (1 - discount)
-    apply_tax = lambda s: s * (1 + tax_rate)
-    
-    processor = make_processor(
-        accept=accept,
-        apply_discount=apply_discount,
-        apply_tax=apply_tax
+    needs_reorder = lambda p: p["stock"] < p["min_stock"]
+    discount_policy = lambda cost, qty: cost * (1 - bulk_discount) if qty >= bulk_threshold else cost
+
+    processor = make_inventory_processor(
+        needs_reorder=needs_reorder,
+        discount_policy=discount_policy
     )
-    return processor(orders)
+    return processor(products)
