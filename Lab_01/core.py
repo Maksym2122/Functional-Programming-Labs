@@ -9,78 +9,13 @@ class Order(TypedDict, total=False):
     items: List[Item]
     paid: bool
     total: float
+    timestamp: float
 
-SubtotalFn = Callable[[Order], float]
-FilterFn = Callable[[float], bool]
+SubtotalFn = Callable[[float], float]
 DiscountFn = Callable[[float], float]
 TaxFn = Callable[[float], float]
+FilterFn = Callable[[float], bool]
 NowFn = Callable[[], float]
-
-def order_subtotal(order: Order) -> float:
-    return sum(it["price"] * it["qty"] for it in order["items"])
-
-def with_total(order: Order, total: float) -> Order:
-    return {**order, "total": total}
-
-def process_orders_pure(
-    orders: Iterable[Order],
-    min_total: float,
-    discount: float,
-    tax_rate: float,
-) -> Dict[str, object]:
-    paid_orders = (o for o in orders if o.get("paid", False))
-    qualified: List[Order] = []
-    revenue = 0.0
-
-    for o in paid_orders:
-        subtotal = order_subtotal(o)
-        if subtotal < min_total:
-            continue
-
-        discounted = subtotal * (1 - discount)
-        total = discounted * (1 + tax_rate)
-
-        new_o = with_total(o, total)
-        qualified.append(new_o)
-        revenue += total
-
-    return {
-        "count": len(qualified),
-        "revenue": revenue,
-        "orders": qualified,
-    }
-
-def make_processor(
-    accept: FilterFn,
-    apply_discount: DiscountFn,
-    apply_tax: TaxFn,
-) -> Callable[[List[Order]], Dict[str, object]]:
-    def process(orders: List[Order]) -> Dict[str, object]:
-        qualified: List[Order] = []
-        revenue = 0.0
-
-        for o in orders:
-            if not o.get("paid", False):
-                continue
-
-            subtotal = order_subtotal(o)
-            if not accept(subtotal):
-                continue
-
-            total = apply_tax(apply_discount(subtotal))
-            qualified.append(with_total(o, total))
-            revenue += total
-
-        return {
-            "count": len(qualified),
-            "revenue": revenue,
-            "orders": qualified,
-        }
-
-    return process
-
-def stamp_total(total: float, now: NowFn) -> tuple[float, float]:
-    return total, now()
 
 A = TypeVar("A")
 B = TypeVar("B")
@@ -91,3 +26,65 @@ def compose(f: Callable[[B], C], g: Callable[[A], B]) -> Callable[[A], C]:
 
 def make_multiplier(k: float) -> Callable[[float], float]:
     return lambda x: x * k
+
+def order_subtotal(order: Order) -> float:
+    return sum(it["price"] * it["qty"] for it in order["items"])
+
+def with_total(order: Order, total: float, timestamp: float | None = None) -> Order:
+    new_order = {**order, "total": total}
+    if timestamp is not None:
+        new_order["timestamp"] = timestamp
+    return new_order
+
+def stamp_total(total: float, now: NowFn) -> tuple[float, float]:
+    return total, now()
+
+def make_processor(
+    *,
+    accept: FilterFn,
+    apply_discount: DiscountFn,
+    apply_tax: TaxFn,
+    now: NowFn | None = None
+) -> Callable[[Iterable[Order]], Dict[str, object]]:
+    def process(orders: Iterable[Order]) -> Dict[str, object]:
+        paid_orders = (o for o in orders if o.get("paid", False))
+        
+        qualified = []
+        revenue = 0.0
+        
+        for o in paid_orders:
+            subtotal = order_subtotal(o)
+            if not accept(subtotal):
+                continue
+            
+            total = apply_tax(apply_discount(subtotal))
+            timestamp = now() if now else None
+            
+            qualified.append(with_total(o, total, timestamp))
+            revenue += total
+            
+        return {
+            "count": len(qualified),
+            "revenue": revenue,
+            "orders": qualified
+        }
+        
+    return process
+
+def process_orders_pure(
+    orders: Iterable[Order],
+    *,
+    min_total: float,
+    discount: float,
+    tax_rate: float
+) -> Dict[str, object]:
+    accept = lambda s: s >= min_total
+    apply_discount = lambda s: s * (1 - discount)
+    apply_tax = lambda s: s * (1 + tax_rate)
+    
+    processor = make_processor(
+        accept=accept,
+        apply_discount=apply_discount,
+        apply_tax=apply_tax
+    )
+    return processor(orders)
