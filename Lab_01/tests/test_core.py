@@ -5,6 +5,7 @@ from core import (
     make_inventory_processor,
     compose,
     make_multiplier,
+    calculate_restock_qty,
     Product
 )
 
@@ -28,7 +29,7 @@ def test_no_mutation(sample_products):
 
 def test_callable_policies(sample_products):
     processor = make_inventory_processor(
-        needs_reorder=lambda p: p["stock"] < p["min_stock"],
+        needs_reorder=lambda p: p.get("stock", 0) < p.get("min_stock", 0),
         discount_policy=lambda cost, qty: cost * 0.5
     )
     result = processor(sample_products)
@@ -38,9 +39,19 @@ def test_callable_policies(sample_products):
 def test_dependency_injection_time(sample_products):
     mock_now = lambda: 1700000000.0
     processor = make_inventory_processor(
-        needs_reorder=lambda p: p["stock"] < p["min_stock"],
+        needs_reorder=lambda p: p.get("stock", 0) < p.get("min_stock", 0),
         discount_policy=lambda cost, qty: cost,
         now=mock_now
     )
     result = processor(sample_products)
     assert result["products"][0]["timestamp"] == 1700000000.0
+
+def test_compose_and_multiplier():
+    double = make_multiplier(2.0)
+    add_ten_percent = lambda x: x * 1.1
+    combined = compose(add_ten_percent, double)
+    assert combined(10.0) == 22.0
+
+def test_calculate_restock_qty():
+    p = {"stock": 10, "min_stock": 25}
+    assert calculate_restock_qty(p) == 15

@@ -1,6 +1,6 @@
-from typing import Iterable, Callable, TypedDict, List, Dict, TypeVar
+from typing import Iterable, Callable, TypedDict, Dict, TypeVar, Optional
 
-class Product(TypedDict):
+class Product(TypedDict, total=False):
     id: int
     name: str
     category: str
@@ -25,15 +25,18 @@ def make_multiplier(k: float) -> Callable[[float], float]:
     return lambda x: x * k
 
 def calculate_restock_qty(product: Product) -> int:
-    needed = product["min_stock"] - product["stock"]
+    stock = product.get("stock", 0)
+    min_stock = product.get("min_stock", 0)
+    needed = min_stock - stock
     return max(needed, 0)
 
 def calculate_item_cost(product: Product, discount_policy: DiscountPolicyFn) -> float:
     qty = calculate_restock_qty(product)
-    base_cost = qty * product["price"]
+    price = product.get("price", 0.0)
+    base_cost = qty * price
     return discount_policy(base_cost, qty)
 
-def with_reorder_info(product: Product, cost: float, timestamp: float | None = None) -> Product:
+def with_reorder_info(product: Product, cost: float, timestamp: Optional[float] = None) -> Product:
     new_product = {**product, "reorder_cost": cost}
     if timestamp is not None:
         new_product["timestamp"] = timestamp
@@ -43,7 +46,7 @@ def make_inventory_processor(
     *,
     needs_reorder: ReorderPolicyFn,
     discount_policy: DiscountPolicyFn,
-    now: NowFn | None = None
+    now: Optional[NowFn] = None
 ) -> Callable[[Iterable[Product]], Dict[str, object]]:
     def process(products: Iterable[Product]) -> Dict[str, object]:
         to_reorder = []
@@ -54,9 +57,9 @@ def make_inventory_processor(
                 continue
             
             cost = calculate_item_cost(p, discount_policy)
-            timestamp = now() if now else None
+            ts = now() if now is not None else None
             
-            updated = with_reorder_info(p, cost, timestamp)
+            updated = with_reorder_info(p, cost, ts)
             to_reorder.append(updated)
             total_cost += cost
 
@@ -74,8 +77,8 @@ def process_inventory_pure(
     bulk_threshold: int = 50,
     bulk_discount: float = 0.1
 ) -> Dict[str, object]:
-    needs_reorder = lambda p: p["stock"] < p["min_stock"]
-    discount_policy = lambda cost, qty: cost * (1 - bulk_discount) if qty >= bulk_threshold else cost
+    needs_reorder = lambda p: p.get("stock", 0) < p.get("min_stock", 0)
+    discount_policy = lambda cost, qty: cost * (1.0 - bulk_discount) if qty >= bulk_threshold else cost
 
     processor = make_inventory_processor(
         needs_reorder=needs_reorder,
