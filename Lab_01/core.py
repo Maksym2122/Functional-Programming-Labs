@@ -7,6 +7,7 @@ class Product(TypedDict, total=False):
     stock: int
     min_stock: int
     price: float
+    reorder_qty: int
     reorder_cost: float
     timestamp: float
 
@@ -27,8 +28,7 @@ def make_multiplier(k: float) -> Callable[[float], float]:
 def calculate_restock_qty(product: Product) -> int:
     stock = product.get("stock", 0)
     min_stock = product.get("min_stock", 0)
-    needed = min_stock - stock
-    return max(needed, 0)
+    return max(min_stock - stock, 0)
 
 def calculate_item_cost(product: Product, discount_policy: DiscountPolicyFn) -> float:
     qty = calculate_restock_qty(product)
@@ -37,7 +37,12 @@ def calculate_item_cost(product: Product, discount_policy: DiscountPolicyFn) -> 
     return discount_policy(base_cost, qty)
 
 def with_reorder_info(product: Product, cost: float, timestamp: Optional[float] = None) -> Product:
-    new_product = {**product, "reorder_cost": cost}
+    qty = calculate_restock_qty(product)
+    new_product = {
+        **product,
+        "reorder_qty": qty,
+        "reorder_cost": cost
+    }
     if timestamp is not None:
         new_product["timestamp"] = timestamp
     return new_product
@@ -65,7 +70,9 @@ def make_inventory_processor(
 
         return {
             "count": len(to_reorder),
+            "total_cost": total_cost,
             "total_reorder_cost": total_cost,
+            "items": to_reorder,
             "products": to_reorder
         }
 
