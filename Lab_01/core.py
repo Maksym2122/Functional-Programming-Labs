@@ -1,101 +1,102 @@
-from typing import Iterable, Callable, TypedDict, List, Dict, TypeVar, Optional
+from typing import Callable, TypedDict
+
 
 class Product(TypedDict, total=False):
     id: int
     name: str
-    category: str
     stock: int
-    min_stock: int
     price: float
-    reorder_qty: int
-    reorder_cost: float
-    timestamp: float
+    min_stock: int
+    category: str
+    order_qty: int
+    replenishment_cost: float
 
-ReorderPolicyFn = Callable[[Product], bool]
-DiscountPolicyFn = Callable[[float, int], float]
-FilterFn = Callable[[Product], bool]
-NowFn = Callable[[], float]
 
-A = TypeVar("A")
-B = TypeVar("B")
-C = TypeVar("C")
+def replenishment_quantity(product: Product) -> int:
+    return max(product["min_stock"] - product["stock"], 0)
 
-def compose(f: Callable[[B], C], g: Callable[[A], B]) -> Callable[[A], C]:
-    return lambda x: f(g(x))
 
-def make_multiplier(k: float) -> Callable[[float], float]:
-    return lambda x: x * k
+def replenishment_cost(product: Product, quantity: int) -> float:
+    return product["price"] * quantity
 
-def calculate_restock_qty(product: Product) -> int:
-    stock = product.get("stock", 0)
-    min_stock = product.get("min_stock", 0)
-    needed = min_stock - stock
-    return max(needed, 0)
 
-def calculate_item_cost(product: Product, discount_policy: DiscountPolicyFn) -> float:
-    qty = calculate_restock_qty(product)
-    price = product.get("price", 0.0)
-    base_cost = qty * price
-    return discount_policy(base_cost, qty)
-
-def with_reorder_info(product: Product, cost: float, timestamp: Optional[float] = None) -> Product:
-    qty = calculate_restock_qty(product)
-    new_product: Product = {
+def with_replenishment(
+    product: Product,
+    quantity: int,
+    cost: float
+) -> Product:
+    return {
         **product,
-        "reorder_qty": qty,
-        "reorder_cost": cost,
+        "order_qty": quantity,
+        "replenishment_cost": cost
     }
-    if timestamp is not None:
-        new_product["timestamp"] = timestamp
-    return new_product
 
-def filter_products(products: Iterable[Product], predicate: FilterFn) -> List[Product]:
-    return [p for p in products if predicate(p)]
 
-def make_inventory_processor(
+def process_products_pure(
+    products: list[Product],
     *,
-    needs_reorder: ReorderPolicyFn,
-    discount_policy: DiscountPolicyFn,
-    now: Optional[NowFn] = None
-) -> Callable[[Iterable[Product]], Dict[str, object]]:
-    def process(products: Iterable[Product]) -> Dict[str, object]:
-        to_reorder: List[Product] = []
+    discount: float
+) -> dict[str, object]:
+    selected = []
+    total_cost = 0.0
+
+    for product in products:
+        quantity = replenishment_quantity(product)
+
+        if quantity == 0:
+            continue
+
+        cost = replenishment_cost(product, quantity)
+        cost = cost * (1 - discount)
+
+        new_product = with_replenishment(product, quantity, cost)
+        selected.append(new_product)
+
+        total_cost += cost
+
+    return {
+        "count": len(selected),
+        "total_cost": total_cost,
+        "products": selected
+    }
+
+
+ReorderFn = Callable[[Product], int]
+DiscountFn = Callable[[float], float]
+
+
+def make_processor(
+    *,
+    reorder: ReorderFn,
+    apply_discount: DiscountFn
+) -> Callable[[list[Product]], dict[str, object]]:
+
+    def process(products: list[Product]) -> dict[str, object]:
+        selected = []
         total_cost = 0.0
 
-        for p in products:
-            if not needs_reorder(p):
+        for product in products:
+            quantity = reorder(product)
+
+            if quantity <= 0:
                 continue
-            
-            cost = calculate_item_cost(p, discount_policy)
-            ts = now() if now is not None else None
-            
-            updated = with_reorder_info(p, cost, ts)
-            to_reorder.append(updated)
+
+            cost = product["price"] * quantity
+            cost = apply_discount(cost)
+
+            new_product = with_replenishment(
+                product,
+                quantity,
+                cost
+            )
+
+            selected.append(new_product)
             total_cost += cost
 
         return {
-            "count": len(to_reorder),
-            "revenue": total_cost,
+            "count": len(selected),
             "total_cost": total_cost,
-            "total_reorder_cost": total_cost,
-            "items": to_reorder,
-            "orders": to_reorder,
-            "products": to_reorder,
+            "products": selected
         }
 
     return process
-
-def process_inventory_pure(
-    products: Iterable[Product],
-    *,
-    bulk_threshold: int = 50,
-    bulk_discount: float = 0.1
-) -> Dict[str, object]:
-    needs_reorder = lambda p: p.get("stock", 0) < p.get("min_stock", 0)
-    discount_policy = lambda cost, qty: cost * (1.0 - bulk_discount) if qty >= bulk_threshold else cost
-
-    processor = make_inventory_processor(
-        needs_reorder=needs_reorder,
-        discount_policy=discount_policy
-    )
-    return processor(products)
