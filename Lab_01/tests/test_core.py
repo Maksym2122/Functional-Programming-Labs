@@ -39,15 +39,15 @@ def test_callable_policies(sample_products):
     assert result["count"] == 2
     assert result["total_reorder_cost"] == 175.0
 
-def test_make_processor_generic(sample_products):
-    accept = lambda p: p.get("stock", 0) < p.get("min_stock", 0)
-    apply_discount = lambda s: s * 0.9
-    apply_tax = lambda s: s * 1.2
-
-    proc = make_processor(accept=accept, apply_discount=apply_discount, apply_tax=apply_tax)
-    res = proc(sample_products)
-    assert res["count"] == 2
-    assert "revenue" in res
+def test_dependency_injection_time(sample_products):
+    mock_now = lambda: 1700000000.0
+    processor = make_inventory_processor(
+        needs_reorder=lambda p: p.get("stock", 0) < p.get("min_stock", 0),
+        discount_policy=lambda cost, qty: cost,
+        now=mock_now,
+    )
+    result = processor(sample_products)
+    assert result["products"][0]["timestamp"] == 1700000000.0
 
 def test_compose_and_multiplier():
     double = make_multiplier(2.0)
