@@ -1,4 +1,4 @@
-from typing import Iterable, Callable, TypedDict, List, Dict, TypeVar, Optional
+from typing import Iterable, Callable, TypedDict, List, Dict, TypeVar, Optional, Any
 
 class Product(TypedDict, total=False):
     id: int
@@ -30,14 +30,14 @@ def make_multiplier(k: float) -> Callable[[float], float]:
     return lambda x: x * k
 
 def calculate_restock_qty(product: Product) -> int:
-    stock: int = product.get("stock", 0)
-    min_stock: int = product.get("min_stock", 0)
+    stock: int = int(product.get("stock", 0))
+    min_stock: int = int(product.get("min_stock", 0))
     needed: int = min_stock - stock
     return max(needed, 0)
 
 def order_subtotal(product: Product) -> float:
     qty: int = calculate_restock_qty(product)
-    price: float = product.get("price", 0.0)
+    price: float = float(product.get("price", 0.0))
     return qty * price
 
 def calculate_item_cost(product: Product, discount_policy: DiscountPolicyFn) -> float:
@@ -69,8 +69,8 @@ def make_processor(
     apply_discount: DiscountFn,
     apply_tax: Optional[TaxFn] = None,
     now: Optional[NowFn] = None,
-) -> Callable[[Iterable[Product]], Dict[str, object]]:
-    def process(products: Iterable[Product]) -> Dict[str, object]:
+) -> Callable[[Iterable[Product]], Dict[str, Any]]:
+    def process(products: Iterable[Product]) -> Dict[str, Any]:
         qualified: List[Product] = []
         revenue: float = 0.0
 
@@ -105,8 +105,8 @@ def make_inventory_processor(
     needs_reorder: ReorderPolicyFn,
     discount_policy: DiscountPolicyFn,
     now: Optional[NowFn] = None,
-) -> Callable[[Iterable[Product]], Dict[str, object]]:
-    def process(products: Iterable[Product]) -> Dict[str, object]:
+) -> Callable[[Iterable[Product]], Dict[str, Any]]:
+    def process(products: Iterable[Product]) -> Dict[str, Any]:
         to_reorder: List[Product] = []
         total_cost: float = 0.0
 
@@ -138,8 +138,8 @@ def process_inventory_pure(
     *,
     bulk_threshold: int = 50,
     bulk_discount: float = 0.1,
-) -> Dict[str, object]:
-    needs_reorder: ReorderPolicyFn = lambda p: p.get("stock", 0) < p.get("min_stock", 0)
+) -> Dict[str, Any]:
+    needs_reorder: ReorderPolicyFn = lambda p: int(p.get("stock", 0)) < int(p.get("min_stock", 0))
     discount_policy: DiscountPolicyFn = (
         lambda cost, qty: cost * (1.0 - bulk_discount) if qty >= bulk_threshold else cost
     )

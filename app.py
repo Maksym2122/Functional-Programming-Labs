@@ -1,7 +1,8 @@
 import time
+from typing import Dict, Any
 from core import process_inventory_pure, make_inventory_processor, Product
 
-def render_report(result: dict) -> None:
+def render_report(result: Dict[str, Any]) -> None:
     print(f"\nКількість позицій для дозамовлення: {result['count']}")
     print(f"Загальна вартість поповнення: ${result['total_reorder_cost']:.2f}\n")
     print("Товари до замовлення:")
@@ -19,7 +20,7 @@ def main() -> None:
     print("=== СКЛАДСЬКИЙ ОБЛІК (Варіант 12) ===")
 
     processor = make_inventory_processor(
-        needs_reorder=lambda p: p.get("stock", 0) < p.get("min_stock", 0),
+        needs_reorder=lambda p: int(p.get("stock", 0)) < int(p.get("min_stock", 0)),
         discount_policy=lambda cost, qty: cost * 0.85 if qty >= 60 else cost,
         now=time.time,
     )
