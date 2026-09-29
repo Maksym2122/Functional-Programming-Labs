@@ -1,9 +1,5 @@
 from typing import Iterable, Callable, TypedDict, List, Dict, TypeVar, Optional
 
-class Item(TypedDict):
-    price: float
-    qty: int
-
 class Product(TypedDict, total=False):
     id: int
     name: str
@@ -34,23 +30,23 @@ def make_multiplier(k: float) -> Callable[[float], float]:
     return lambda x: x * k
 
 def calculate_restock_qty(product: Product) -> int:
-    stock = product.get("stock", 0)
-    min_stock = product.get("min_stock", 0)
-    needed = min_stock - stock
+    stock: int = product.get("stock", 0)
+    min_stock: int = product.get("min_stock", 0)
+    needed: int = min_stock - stock
     return max(needed, 0)
 
 def order_subtotal(product: Product) -> float:
-    qty = calculate_restock_qty(product)
-    price = product.get("price", 0.0)
+    qty: int = calculate_restock_qty(product)
+    price: float = product.get("price", 0.0)
     return qty * price
 
 def calculate_item_cost(product: Product, discount_policy: DiscountPolicyFn) -> float:
-    subtotal = order_subtotal(product)
-    qty = calculate_restock_qty(product)
+    subtotal: float = order_subtotal(product)
+    qty: int = calculate_restock_qty(product)
     return discount_policy(subtotal, qty)
 
 def with_total(product: Product, total: float, timestamp: Optional[float] = None) -> Product:
-    qty = calculate_restock_qty(product)
+    qty: int = calculate_restock_qty(product)
     new_product: Product = {
         **product,
         "reorder_qty": qty,
@@ -76,18 +72,18 @@ def make_processor(
 ) -> Callable[[Iterable[Product]], Dict[str, object]]:
     def process(products: Iterable[Product]) -> Dict[str, object]:
         qualified: List[Product] = []
-        revenue = 0.0
+        revenue: float = 0.0
 
         for p in products:
             if not accept(p):
                 continue
 
-            subtotal = order_subtotal(p)
-            discounted = apply_discount(subtotal)
-            total = apply_tax(discounted) if apply_tax else discounted
+            subtotal: float = order_subtotal(p)
+            discounted: float = apply_discount(subtotal)
+            total: float = apply_tax(discounted) if apply_tax is not None else discounted
 
-            ts = now() if now is not None else None
-            new_p = with_total(p, total, ts)
+            ts: Optional[float] = now() if now is not None else None
+            new_p: Product = with_total(p, total, ts)
 
             qualified.append(new_p)
             revenue += total
@@ -110,14 +106,32 @@ def make_inventory_processor(
     discount_policy: DiscountPolicyFn,
     now: Optional[NowFn] = None,
 ) -> Callable[[Iterable[Product]], Dict[str, object]]:
-    accept: FilterFn = needs_reorder
-    apply_discount: DiscountFn = lambda subtotal: discount_policy(subtotal, 1)
+    def process(products: Iterable[Product]) -> Dict[str, object]:
+        to_reorder: List[Product] = []
+        total_cost: float = 0.0
 
-    return make_processor(
-        accept=accept,
-        apply_discount=apply_discount,
-        now=now,
-    )
+        for p in products:
+            if not needs_reorder(p):
+                continue
+
+            cost: float = calculate_item_cost(p, discount_policy)
+            ts: Optional[float] = now() if now is not None else None
+
+            updated: Product = with_reorder_info(p, cost, ts)
+            to_reorder.append(updated)
+            total_cost += cost
+
+        return {
+            "count": len(to_reorder),
+            "revenue": total_cost,
+            "total_cost": total_cost,
+            "total_reorder_cost": total_cost,
+            "orders": to_reorder,
+            "products": to_reorder,
+            "items": to_reorder,
+        }
+
+    return process
 
 def process_inventory_pure(
     products: Iterable[Product],
