@@ -1,0 +1,44 @@
+[
+  {
+    "id": 101,
+    "name": "  олена ковальчук ",
+    "tariff": "SuperNet Pro",
+    "payments": [180.0, 180.0, 200.0]
+  },
+  {
+    "id": 102,
+    "name": "ігор мельник",
+    "tariff": "Joice Start",
+    "payments": [150.0, 150.0, 160.0]
+  },
+  {
+    "id": 103,
+    "name": "марія бондар",
+    "tariff": "SuperNet Pro",
+    "payments": [220.0, 230.0, 210.0]
+  },
+  {
+    "id": 104,
+    "name": "тараc шевченко",
+    "tariff": "SuperNet Unlim",
+    "payments": [300.0, 320.0]
+  },
+  {
+    "id": 105,
+    "name": "дмитро савченко",
+    "tariff": "Joice Start",
+    "payments": [90.0]
+  },
+  {
+    "id": 106,
+    "name": "анна ткаченко",
+    "tariff": "SuperNet Pro",
+    "payments": [200.0, 200.0]
+  },
+  {
+    "id": 107,
+    "name": "сергій павленко",
+    "tariff": "Joice Pro",
+    "payments": [50.0, 60.0]
+  }
+]
