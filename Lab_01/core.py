@@ -1,4 +1,7 @@
-from typing import Iterable, Callable, TypedDict, List, Dict, TypeVar, Optional, Any
+"""Чисті функції та вищі функції для обробки складського обліку."""
+
+from typing import Any, Callable, Dict, Iterable, List, Optional, TypedDict, TypeVar
+
 
 class Product(TypedDict, total=False):
     id: int
@@ -12,6 +15,7 @@ class Product(TypedDict, total=False):
     total: float
     timestamp: float
 
+
 ReorderPolicyFn = Callable[[Product], bool]
 DiscountPolicyFn = Callable[[float, int], float]
 DiscountFn = Callable[[float], float]
@@ -23,11 +27,14 @@ A = TypeVar("A")
 B = TypeVar("B")
 C = TypeVar("C")
 
+
 def compose(f: Callable[[B], C], g: Callable[[A], B]) -> Callable[[A], C]:
     return lambda x: f(g(x))
 
+
 def make_multiplier(k: float) -> Callable[[float], float]:
     return lambda x: x * k
+
 
 def calculate_restock_qty(product: Product) -> int:
     stock: int = int(product.get("stock", 0))
@@ -35,17 +42,22 @@ def calculate_restock_qty(product: Product) -> int:
     needed: int = min_stock - stock
     return max(needed, 0)
 
+
 def order_subtotal(product: Product) -> float:
     qty: int = calculate_restock_qty(product)
     price: float = float(product.get("price", 0.0))
     return qty * price
+
 
 def calculate_item_cost(product: Product, discount_policy: DiscountPolicyFn) -> float:
     subtotal: float = order_subtotal(product)
     qty: int = calculate_restock_qty(product)
     return discount_policy(subtotal, qty)
 
-def with_total(product: Product, total: float, timestamp: Optional[float] = None) -> Product:
+
+def with_total(
+    product: Product, total: float, timestamp: Optional[float] = None
+) -> Product:
     qty: int = calculate_restock_qty(product)
     new_product: Product = {
         **product,
@@ -57,11 +69,16 @@ def with_total(product: Product, total: float, timestamp: Optional[float] = None
         new_product["timestamp"] = timestamp
     return new_product
 
-def with_reorder_info(product: Product, cost: float, timestamp: Optional[float] = None) -> Product:
+
+def with_reorder_info(
+    product: Product, cost: float, timestamp: Optional[float] = None
+) -> Product:
     return with_total(product, cost, timestamp)
+
 
 def filter_products(products: Iterable[Product], predicate: FilterFn) -> List[Product]:
     return [p for p in products if predicate(p)]
+
 
 def make_processor(
     *,
@@ -100,6 +117,7 @@ def make_processor(
 
     return process
 
+
 def make_inventory_processor(
     *,
     needs_reorder: ReorderPolicyFn,
@@ -133,13 +151,16 @@ def make_inventory_processor(
 
     return process
 
+
 def process_inventory_pure(
     products: Iterable[Product],
     *,
     bulk_threshold: int = 50,
     bulk_discount: float = 0.1,
 ) -> Dict[str, Any]:
-    needs_reorder: ReorderPolicyFn = lambda p: int(p.get("stock", 0)) < int(p.get("min_stock", 0))
+    needs_reorder: ReorderPolicyFn = (
+        lambda p: int(p.get("stock", 0)) < int(p.get("min_stock", 0))
+    )
     discount_policy: DiscountPolicyFn = (
         lambda cost, qty: cost * (1.0 - bulk_discount) if qty >= bulk_threshold else cost
     )
