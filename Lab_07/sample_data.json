@@ -1,0 +1,7 @@
+[
+  {"title": "  Python Functional Architecture  ", "category": " programming ", "students": "4200", "rating": "4.9", "price": "49.99"},
+  {"title": "AsyncIO & Concurrency Mastery", "category": "PROGRAMMING", "students": 3100, "rating": 4.8, "price": 59.0},
+  {"title": "  SQL & PostgreSQL Internals ", "category": "databases", "students": "5100", "rating": "4.9", "price": "45.0"},
+  {"title": "UI/UX Prototyping Basics", "category": "design", "students": 1800, "rating": 4.2, "price": 29.0},
+  {"title": "Docker & Linux Production", "category": "devops", "students": 2900, "rating": 4.7, "price": 39.5}
+]
